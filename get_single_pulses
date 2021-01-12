@@ -1,0 +1,49 @@
+#!/bin/bash
+# Script for getting single pulses from filterbank observation
+# Requires filfile, bestprof and polycos to be in the directory
+
+
+# Get files:
+bestprof=$(ls *par*bestprof)
+filfile=$(ls ds*fil)
+
+
+# RFI clean:
+rficlean -zerodm -o rficlean_${filfile} $filfile
+
+
+# Get initial period
+period_ms=$(cat $bestprof | grep P_topo | awk '{print $5}')
+period_s=$(bc -l <<<"$period/1000");
+
+
+# Get DM
+dm=$(cat $bestprof | grep DM | awk '{print $5}')
+echo "DM"
+echo $dm
+
+
+# Get length of observation
+length=$(readfile $filfile | grep 'Time per file' | awk '{print $6}')
+echo "Length"
+echo $length
+
+
+# Get rough number of pulses:
+npulses_o_1000=$(bc -l <<<"scale=0; $length/$period_ms");
+npulses_o_1000=$(bc -l <<<"$npulses_o_1000 - 1");
+
+
+# Get rough dedispersed data:
+for i in $( seq 0 $npulses_o_1000 )
+do
+        echo "Waterfaller dumping $i x1000 of $npulses_o_1000 x1000" 
+        t_beg=$(bc -l <<<"$i*$period_ms");
+        python2 waterfaller_puma.py -T $t_beg -t $period_ms -d $dm rficlean_${filfile}; #89.4 segundos son 1000 pulsos.
+        mv times.csv times_$i.csv;
+        mv original.csv original_$i.csv 
+done
+
+
+# Get individual pulses in phase:
+python2 merge.py $npulses_o_1000 
